@@ -9,8 +9,6 @@ class ErudaApplication : Application() {
         super.onCreate()
         
         // Enable WebView debugging in debug builds
-        if (BuildConfig.DEBUG) {
-            WebView.setWebContentsDebuggingEnabled(true)
-        }
+        WebView.setWebContentsDebuggingEnabled(true)
     }
 }
