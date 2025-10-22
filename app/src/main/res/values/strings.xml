@@ -2,4 +2,9 @@
     <string name="app_name">Eruda</string>
     <string name="input_url">Enter Url</string>
     <string name="mode">day</string>
+    <string name="go_back">Go back</string>
+    <string name="go_forward">Go forward</string>
+    <string name="site_icon">Site icon</string>
+    <string name="search_or_type_url">Search or type URL</string>
+    <string name="refresh_or_go">Refresh or go</string>
 </resources>
