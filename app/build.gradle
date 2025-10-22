@@ -4,6 +4,7 @@ plugins {
 }
 
 android {
+    namespace "io.liriliri.eruda"
     compileSdk 36
 
     defaultConfig {
