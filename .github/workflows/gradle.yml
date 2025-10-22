@@ -33,6 +33,10 @@ jobs:
     # See: https://github.com/gradle/actions/blob/main/setup-gradle/README.md
     - name: Setup Gradle
       uses: gradle/actions/setup-gradle@main
+      with:
+          build-scan-publish: true
+          build-scan-terms-of-use-url: "https://gradle.com/terms-of-service"
+          build-scan-terms-of-use-agree: "yes"
 
     - name: Build with Gradle Wrapper
       run: ./gradlew build
@@ -44,7 +48,7 @@ jobs:
 
     # A file, directory or wildcard pattern that describes what to upload
     # Required.
-        path: app/build/outputs/apk/*.apk
+        path: app/build/outputs/apk/
 
     # NOTE: The Gradle Wrapper is the default and recommended way to run Gradle (https://docs.gradle.org/current/userguide/gradle_wrapper.html).
     # If your project does not have the Gradle Wrapper configured, you can use the following configuration to run Gradle with a specified version.
