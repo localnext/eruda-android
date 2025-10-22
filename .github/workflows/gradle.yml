@@ -37,7 +37,7 @@ jobs:
           build-scan-terms-of-use-agree: "yes"
 
     - name: Build with Gradle Wrapper
-      run: ./gradlew build
+      run: ./gradlew assemble
     - uses: actions/upload-artifact@v4
       with: 
     # Name of the artifact to upload.
