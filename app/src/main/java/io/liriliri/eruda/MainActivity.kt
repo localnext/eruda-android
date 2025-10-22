@@ -1,336 +1,318 @@
 package io.liriliri.eruda
 
 import android.annotation.SuppressLint
-import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.graphics.Bitmap
-import android.graphics.Rect
 import android.net.Uri
 import android.os.Bundle
 import android.util.Log
 import android.view.KeyEvent
-import android.view.MotionEvent
-import android.view.View
-import android.view.inputmethod.InputMethodManager
-import android.webkit.*
-import android.widget.EditText
-import android.widget.ImageView
-import android.widget.ProgressBar
+import android.view.inputmethod.EditorInfo
+import android.webkit.CookieManager
+import android.webkit.ValueCallback
+import android.webkit.WebChromeClient
+import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
+import android.webkit.WebSettings
+import android.webkit.WebView
+import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.updatePadding
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.webkit.WebSettingsCompat
 import androidx.webkit.WebViewFeature
+import io.liriliri.eruda.databinding.ActivityMainBinding
+import kotlinx.coroutines.launch
 import okhttp3.Headers.Companion.toHeaders
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import java.io.UnsupportedEncodingException
 import java.net.URLEncoder
+import java.nio.charset.StandardCharsets
 
-// https://github.com/mengkunsoft/MkBrowser
 class MainActivity : AppCompatActivity() {
-    private lateinit var webView: WebView
-    private lateinit var progressBar: ProgressBar
-    private lateinit var textUrl: EditText
-    private lateinit var btnStart: ImageView
-    private lateinit var btnGoBack: ImageView
-    private lateinit var btnGoForward: ImageView
-    private lateinit var favicon: ImageView
-    private lateinit var manager: InputMethodManager
-    private val TAG = "Eruda.MainActivity"
-    var mFilePathCallback: ValueCallback<Array<Uri>>? = null
+    
+    private lateinit var binding: ActivityMainBinding
+    private val viewModel: MainViewModel by viewModels()
+    
+    private var filePathCallback: ValueCallback<Array<Uri>>? = null
+    
+    private val fileChooserLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        filePathCallback?.onReceiveValue(
+            WebChromeClient.FileChooserParams.parseResult(result.resultCode, result.data)
+        )
+        filePathCallback = null
+    }
+    
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
-
+        enableEdgeToEdge()
         super.onCreate(savedInstanceState)
-
-        setContentView(R.layout.activity_main)
-
-        manager = getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager
-
-        initView()
-        initWebView()
+        
+        binding = ActivityMainBinding.inflate(layoutInflater)
+        setContentView(binding.root)
+        
+        setupWindowInsets()
+        setupWebView()
+        setupToolbar()
+        observeViewModel()
     }
-
-    private fun initView() {
-        webView = findViewById(R.id.webView)
-        progressBar = findViewById(R.id.progressBar)
-        textUrl = findViewById(R.id.textUrl)
-        favicon = findViewById(R.id.webIcon)
-        btnStart = findViewById(R.id.btnStart)
-        btnGoBack = findViewById(R.id.goBack)
-        btnGoForward = findViewById(R.id.goForward)
-
-        btnStart.setOnClickListener {
-            if (textUrl.hasFocus()) {
-                if (manager.isActive) {
-                    manager.hideSoftInputFromWindow(textUrl.applicationWindowToken, 0)
-                }
-                var input = textUrl.text.toString()
-                if (!isHttpUrl(input)) {
-                    if (mayBeUrl(input)) {
-                        input = "https://${input}"
-                    } else {
-                        try {
-                            input = URLEncoder.encode(input, "utf-8")
-                        } catch (e: UnsupportedEncodingException) {
-                            Log.e(TAG, e.message.toString())
-                        }
-                        input = "https://www.google.com/search?q=${input}"
-                    }
-                }
-                webView.loadUrl(input)
-                textUrl.clearFocus()
-            } else {
-                webView.reload()
-            }
-        }
-
-        btnGoBack.setOnClickListener {
-            webView.goBack()
-        }
-
-        btnGoForward.setOnClickListener {
-            webView.goForward()
-        }
-
-        textUrl.setOnFocusChangeListener { _, hasFocus ->
-            if (hasFocus) {
-                textUrl.setText(webView.url)
-                textUrl.setSelection(textUrl.text.length)
-                btnStart.setImageResource(R.drawable.arrow_right)
-            } else {
-                textUrl.setText(webView.title)
-                btnStart.setImageResource(R.drawable.refresh)
-            }
-        }
-        textUrl.setOnKeyListener { _, keyCode, keyEvent ->
-            if (keyCode == KeyEvent.KEYCODE_ENTER && keyEvent.action == KeyEvent.ACTION_DOWN) {
-                btnStart.callOnClick()
-                textUrl.clearFocus()
-            }
-
-            return@setOnKeyListener false
-        }
-    }
-
-    @Suppress("DEPRECATION")
-    @SuppressLint("SetJavaScriptEnabled", "RequiresFeature")
-    private fun initWebView() {
-        webView.webViewClient = object : WebViewClient() {
-            override fun shouldOverrideUrlLoading(
-                view: WebView,
-                request: WebResourceRequest
-            ): Boolean {
-                val url = request.url.toString()
-
-                if (isHttpUrl(url)) {
-                    return false
-                }
-
-                return try {
-                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
-                    startActivity(intent)
-                    false
-                } catch (e: Exception) {
-                    true
-                }
-            }
-
-            override fun shouldInterceptRequest(
-                view: WebView,
-                request: WebResourceRequest
-            ): WebResourceResponse? {
-                if (request.isForMainFrame) {
-                    val url = request.url.toString()
-                    if (!isHttpUrl(url)) {
-                        return null
-                    }
-                    Log.i(TAG, "Loading url: $url")
-
-                    var headers = request.requestHeaders.toHeaders()
-                    val contentType = headers["content-type"]
-                    if (contentType == "application/x-www-form-urlencoded") {
-                        return null
-                    }
-                    val cookie = CookieManager.getInstance().getCookie(url)
-                    if (cookie != null) {
-                        headers = (headers.toMap() + Pair("cookie", cookie)).toHeaders()
-                    }
-                    Log.i(TAG, "Intercept url: $url")
-                    Log.i(TAG, "Request headers: ${headers.toMap()}")
-
-                    val client = OkHttpClient.Builder().followRedirects(false).build()
-                    val req = Request.Builder()
-                        .url(url)
-                        .headers(headers)
-                        .build()
-
-                    return try {
-                        val response = client.newCall(req).execute()
-                        if (response.headers["content-security-policy"] == null) {
-                            return null
-                        }
-                        val resHeaders =
-                            response.headers.toMap().filter { it.key != "content-security-policy" }
-                        Log.i(TAG, "Response headers: $resHeaders")
-
-                        return WebResourceResponse(
-                            "text/html",
-                            response.header("content-encoding", "utf-8"),
-                            response.code,
-                            "ok",
-                            resHeaders,
-                            response.body?.byteStream()
-                        )
-                    } catch (e: Exception) {
-                        Log.e(TAG, e.message.toString())
-                        null
-                    }
-                }
-
-                return null
-            }
-
-            override fun onPageStarted(view: WebView?, url: String, favicon: Bitmap?) {
-                super.onPageStarted(view, url, favicon)
-
-                progressBar.progress = 0
-                progressBar.visibility = View.VISIBLE
-                setTextUrl("Loading...")
-                this@MainActivity.favicon.setImageResource(R.drawable.tool)
-            }
-
-            override fun onPageFinished(view: WebView, url: String) {
-                super.onPageFinished(view, url)
-
-                progressBar.visibility = View.INVISIBLE
-                title = view.title
-                setTextUrl(view.title)
-
-                val script = """
-                    (function () {
-                        if (window.eruda) return;
-                        var define;
-                        if (window.define) {
-                            define = window.define;
-                            window.define = null;
-                        }
-                        var script = document.createElement('script'); 
-                        script.src = '//cdn.jsdelivr.net/npm/eruda'; 
-                        document.body.appendChild(script); 
-                        script.onload = function () { 
-                            eruda.init();
-                            if (define) {
-                                window.define = define;
-                            }
-                        }
-                    })();
-                """
-                webView.evaluateJavascript(script) {}
-            }
-        }
-
-        val selectFileLauncher =
-            registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-                if (mFilePathCallback != null) {
-                    mFilePathCallback!!.onReceiveValue(
-                        WebChromeClient.FileChooserParams.parseResult(
-                            result.resultCode,
-                            result.data
-                        )
-                    )
-                    mFilePathCallback = null
-                }
-            }
-
-        webView.webChromeClient = object : WebChromeClient() {
-            override fun onProgressChanged(view: WebView, newProgress: Int) {
-                super.onProgressChanged(view, newProgress)
-
-                progressBar.progress = newProgress
-            }
-
-            override fun onReceivedIcon(view: WebView, icon: Bitmap) {
-                super.onReceivedIcon(view, icon)
-
-                favicon.setImageBitmap(icon)
-            }
-
-            override fun onShowFileChooser(
-                webView: WebView?,
-                filePathCallback: ValueCallback<Array<Uri>>,
-                fileChooserParams: FileChooserParams
-            ): Boolean {
-                if (mFilePathCallback != null) {
-                    mFilePathCallback!!.onReceiveValue(null)
-                    mFilePathCallback = null
-                }
-                mFilePathCallback = filePathCallback
-                val intent = fileChooserParams.createIntent()
-                try {
-                    selectFileLauncher.launch(intent)
-                } catch (e: ActivityNotFoundException) {
-                    mFilePathCallback = null
-                    return false
-                }
-                return true
-            }
-        }
-        val settings = webView.settings
-        settings.javaScriptEnabled = true
-        settings.domStorageEnabled = true
-        settings.mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
-
-        if (resources.getString(R.string.mode) == "night") {
-            // https://stackoverflow.com/questions/57449900/letting-webview-on-android-work-with-prefers-color-scheme-dark
-            val supportForceDarkStrategy =
-                WebViewFeature.isFeatureSupported(WebViewFeature.FORCE_DARK_STRATEGY)
-            val supportForceDark = WebViewFeature.isFeatureSupported(
-                WebViewFeature.FORCE_DARK
+    
+    private fun setupWindowInsets() {
+        ViewCompat.setOnApplyWindowInsetsListener(binding.root) { view, insets ->
+            val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+            view.updatePadding(
+                left = systemBars.left,
+                top = systemBars.top,
+                right = systemBars.right,
+                bottom = systemBars.bottom
             )
-            if (supportForceDarkStrategy && supportForceDark) {
+            insets
+        }
+    }
+    
+    @SuppressLint("SetJavaScriptEnabled")
+    private fun setupWebView() {
+        binding.webView.apply {
+            settings.apply {
+                javaScriptEnabled = true
+                domStorageEnabled = true
+                databaseEnabled = true
+                mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+                cacheMode = WebSettings.LOAD_DEFAULT
+                
+                // Modern features
+                setSupportZoom(true)
+                builtInZoomControls = true
+                displayZoomControls = false
+                loadWithOverviewMode = true
+                useWideViewPort = true
+                setSupportMultipleWindows(false)
+                
+                // Security
+                allowFileAccess = false
+                allowContentAccess = false
+                
+                // Performance
+                setRenderPriority(WebSettings.RenderPriority.HIGH)
+            }
+            
+            // Dark mode support
+            setupDarkMode()
+            
+            webViewClient = ModernWebViewClient(
+                onPageStarted = { url ->
+                    viewModel.onPageStarted(url)
+                    binding.favicon.setImageResource(R.drawable.tool)
+                },
+                onPageFinished = { url, title ->
+                    viewModel.onPageFinished(url, title)
+                    injectEruda()
+                }
+            )
+            
+            webChromeClient = ModernWebChromeClient(
+                onProgressChanged = { progress ->
+                    viewModel.updateProgress(progress)
+                },
+                onReceivedIcon = { icon ->
+                    binding.favicon.setImageBitmap(icon)
+                },
+                onShowFileChooser = { callback, params ->
+                    handleFileChooser(callback, params)
+                }
+            )
+            
+            loadUrl("https://github.com/liriliri/eruda")
+        }
+    }
+    
+    private fun WebView.setupDarkMode() {
+        if (resources.getString(R.string.mode) == "night") {
+            if (WebViewFeature.isFeatureSupported(WebViewFeature.ALGORITHMIC_DARKENING)) {
+                WebSettingsCompat.setAlgorithmicDarkeningAllowed(settings, true)
+            } else if (WebViewFeature.isFeatureSupported(WebViewFeature.FORCE_DARK)) {
+                @Suppress("DEPRECATION")
                 WebSettingsCompat.setForceDark(settings, WebSettingsCompat.FORCE_DARK_ON)
-                WebSettingsCompat.setForceDarkStrategy(
-                    settings,
-                    WebSettingsCompat.DARK_STRATEGY_WEB_THEME_DARKENING_ONLY
-                )
             }
         }
-
-        webView.loadUrl("https://github.com/liriliri/eruda")
     }
-
-    override fun dispatchTouchEvent(event: MotionEvent): Boolean {
-        if (event.action == MotionEvent.ACTION_DOWN) {
-            val v = currentFocus
-            if (v is EditText) {
-                val outRect = Rect()
-                v.getGlobalVisibleRect(outRect)
-                if (!outRect.contains(event.rawX.toInt(), event.rawY.toInt())) {
-                    v.clearFocus()
-                    if (manager.isActive) {
-                        manager.hideSoftInputFromWindow(textUrl.applicationWindowToken, 0)
+    
+    private fun setupToolbar() {
+        with(binding) {
+            textUrl.apply {
+                setOnEditorActionListener { _, actionId, event ->
+                    if (actionId == EditorInfo.IME_ACTION_GO || 
+                        event?.keyCode == KeyEvent.KEYCODE_ENTER) {
+                        handleUrlInput()
+                        true
+                    } else {
+                        false
+                    }
+                }
+                
+                setOnFocusChangeListener { _, hasFocus ->
+                    if (hasFocus) {
+                        setText(webView.url)
+                        setSelection(text.length)
+                        btnStart.setImageResource(R.drawable.arrow_right)
+                    } else {
+                        setText(webView.title)
+                        btnStart.setImageResource(R.drawable.refresh)
+                    }
+                }
+            }
+            
+            btnStart.setOnClickListener {
+                if (textUrl.hasFocus()) {
+                    handleUrlInput()
+                } else {
+                    webView.reload()
+                }
+            }
+            
+            btnGoBack.setOnClickListener {
+                if (webView.canGoBack()) {
+                    webView.goBack()
+                }
+            }
+            
+            btnGoForward.setOnClickListener {
+                if (webView.canGoForward()) {
+                    webView.goForward()
+                }
+            }
+        }
+    }
+    
+    private fun observeViewModel() {
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                launch {
+                    viewModel.uiState.collect { state ->
+                        updateUI(state)
                     }
                 }
             }
         }
-        return super.dispatchTouchEvent(event)
     }
-
-    private fun setTextUrl(text: String?) {
-        if (!textUrl.hasFocus() && text != null) {
-            textUrl.setText(text)
+    
+    private fun updateUI(state: BrowserUiState) {
+        with(binding) {
+            progressBar.progress = state.progress
+            progressBar.visibility = if (state.isLoading) 
+                android.view.View.VISIBLE 
+            else 
+                android.view.View.INVISIBLE
+            
+            if (!textUrl.hasFocus()) {
+                textUrl.setText(state.title ?: "Loading...")
+            }
+            
+            btnGoBack.isEnabled = state.canGoBack
+            btnGoForward.isEnabled = state.canGoForward
+            btnGoBack.alpha = if (state.canGoBack) 1.0f else 0.4f
+            btnGoForward.alpha = if (state.canGoForward) 1.0f else 0.4f
         }
     }
+    
+    private fun handleUrlInput() {
+        val input = binding.textUrl.text.toString()
+        val processedUrl = viewModel.processUrlInput(input)
+        binding.webView.loadUrl(processedUrl)
+        binding.textUrl.clearFocus()
+        hideKeyboard()
+    }
+    
+    private fun hideKeyboard() {
+        currentFocus?.let { view ->
+            val imm = getSystemService(INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager
+            imm.hideSoftInputFromWindow(view.windowToken, 0)
+        }
+    }
+    
+    private fun injectEruda() {
+        val script = """
+            (function () {
+                if (window.eruda) return;
+                var define;
+                if (window.define) {
+                    define = window.define;
+                    window.define = null;
+                }
+                var script = document.createElement('script'); 
+                script.src = '//cdn.jsdelivr.net/npm/eruda'; 
+                document.body.appendChild(script); 
+                script.onload = function () { 
+                    eruda.init();
+                    if (define) {
+                        window.define = define;
+                    }
+                }
+            })();
+        """.trimIndent()
+        
+        binding.webView.evaluateJavascript(script, null)
+    }
+    
+    private fun handleFileChooser(
+        callback: ValueCallback<Array<Uri>>,
+        params: WebChromeClient.FileChooserParams
+    ): Boolean {
+        filePathCallback?.onReceiveValue(null)
+        filePathCallback = callback
+        
+        return try {
+            fileChooserLauncher.launch(params.createIntent())
+            true
+        } catch (e: Exception) {
+            Log.e(TAG, "File chooser error", e)
+            filePathCallback = null
+            false
+        }
+    }
+    
+    override fun onBackPressed() {
+        if (binding.webView.canGoBack()) {
+            binding.webView.goBack()
+        } else {
+            super.onBackPressed()
+        }
+    }
+    
+    override fun onDestroy() {
+        binding.webView.destroy()
+        super.onDestroy()
+    }
+    
+    companion object {
+        private const val TAG = "Eruda.MainActivity"
+    }
 }
 
-fun isHttpUrl(url: String): Boolean {
-    return url.startsWith("http:") || url.startsWith("https:")
+// Extension functions
+fun String.isHttpUrl(): Boolean = startsWith("http://") || startsWith("https://")
+
+fun String.mayBeUrl(): Boolean {
+    val domains = arrayOf(".com", ".io", ".me", ".org", ".net", ".tv", ".cn", ".co", ".app")
+    return domains.any { contains(it, ignoreCase = true) } && !contains(" ")
 }
 
-fun mayBeUrl(text: String): Boolean {
-    val domains = arrayOf(".com", ".io", ".me", ".org", ".net", ".tv", ".cn")
+fun String.toSearchUrl(): String {
+    val encoded = URLEncoder.encode(this, StandardCharsets.UTF_8.toString())
+    return "https://www.google.com/search?q=$encoded"
+}
 
-    return domains.any { text.contains(it) }
+fun String.normalizeUrl(): String = when {
+    isHttpUrl() -> this
+    mayBeUrl() -> if (startsWith("www.")) "https://$this" else "https://www.$this"
+    else -> toSearchUrl()
 }
