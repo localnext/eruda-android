@@ -1,32 +1,34 @@
 plugins {
     id 'com.android.application'
+    id 'com.android.library'
     id 'org.jetbrains.kotlin.android'
 }
 
 android {
-    compileSdk 33
+    compileSdk 36
 
     defaultConfig {
         applicationId "io.liriliri.eruda"
-        minSdk 21
-        targetSdk 33
-        versionCode 2
-        versionName "1.2.0"
+        minSdk 24
+        targetSdk 36
+        versionCode 3
+        versionName "1.3.0"
         archivesBaseName = "eruda-v$versionName"
     }
 
     buildTypes {
         release {
-            minifyEnabled true
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
     compileOptions {
-        sourceCompatibility JavaVersion.VERSION_1_8
-        targetCompatibility JavaVersion.VERSION_1_8
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
     }
     kotlinOptions {
-        jvmTarget = '1.8'
+        jvmTarget = '17'
     }
     buildFeatures {
         viewBinding true
@@ -34,9 +36,9 @@ android {
 }
 
 dependencies {
-    implementation 'androidx.core:core-ktx:1.7.0'
-    implementation 'androidx.appcompat:appcompat:1.5.1'
-    implementation "androidx.core:core-splashscreen:1.0.0"
-    implementation 'androidx.webkit:webkit:1.6.1'
-    implementation 'com.squareup.okhttp3:okhttp:4.10.0'
+    implementation 'androidx.core:core-ktx:1.17.0'
+    implementation 'androidx.appcompat:appcompat:1.7.1'
+    implementation "androidx.core:core-splashscreen:1.2.0-rc01"
+    implementation 'androidx.webkit:webkit:1.15.0-alpha03'
+    implementation 'com.squareup.okhttp3:okhttp:5.2.1'
 }
