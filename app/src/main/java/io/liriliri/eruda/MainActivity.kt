@@ -111,7 +111,7 @@ class MainActivity : AppCompatActivity() {
             webViewClient = ModernWebViewClient(
                 onPageStarted = { url ->
                     viewModel.onPageStarted(url)
-                    binding.favicon.setImageResource(R.drawable.tool)
+                    binding.webIcon.setImageResource(R.drawable.tool)
                 },
                 onPageFinished = { url, title ->
                     viewModel.onPageFinished(url, title)
@@ -124,7 +124,7 @@ class MainActivity : AppCompatActivity() {
                     viewModel.updateProgress(progress)
                 },
                 onReceivedIcon = { icon ->
-                    binding.favicon.setImageBitmap(icon)
+                    binding.webIcon.setImageBitmap(icon)
                 },
                 onShowFileChooser = { callback, params ->
                     handleFileChooser(callback, params)
@@ -135,7 +135,8 @@ class MainActivity : AppCompatActivity() {
         }
     }
     
-    private fun WebView.setupDarkMode() {
+    private fun setupDarkMode() {
+        val settings = binding.webView.settings
         if (resources.getString(R.string.mode) == "night") {
             if (WebViewFeature.isFeatureSupported(WebViewFeature.ALGORITHMIC_DARKENING)) {
                 WebSettingsCompat.setAlgorithmicDarkeningAllowed(settings, true)
@@ -196,10 +197,8 @@ class MainActivity : AppCompatActivity() {
     private fun observeViewModel() {
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
-                launch {
-                    viewModel.uiState.collect { state ->
-                        updateUI(state)
-                    }
+                viewModel.uiState.collect { state ->
+                    updateUI(state)
                 }
             }
         }
@@ -217,10 +216,10 @@ class MainActivity : AppCompatActivity() {
                 textUrl.setText(state.title ?: "Loading...")
             }
             
-            btnGoBack.isEnabled = state.canGoBack
-            btnGoForward.isEnabled = state.canGoForward
-            btnGoBack.alpha = if (state.canGoBack) 1.0f else 0.4f
-            btnGoForward.alpha = if (state.canGoForward) 1.0f else 0.4f
+            goBack.isEnabled = state.canGoBack
+            goForward.isEnabled = state.canGoForward
+            goBack.alpha = if (state.canGoBack) 1.0f else 0.4f
+            goForward.alpha = if (state.canGoForward) 1.0f else 0.4f
         }
     }
     
