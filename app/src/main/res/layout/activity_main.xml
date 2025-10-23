@@ -25,7 +25,7 @@
             android:background="?attr/selectableItemBackgroundBorderless"
             android:contentDescription="Back"
             android:padding="8dp"
-            android:src="@drawable/tool" />
+            android:src="@drawable/back" />
 
         <!-- Forward Button -->
         <ImageView
@@ -35,7 +35,7 @@
             android:background="?attr/selectableItemBackgroundBorderless"
             android:contentDescription="Forward"
             android:padding="8dp"
-            android:src="@drawable/tool" />
+            android:src="@drawable/right" />
 
         <!-- URL Bar Container -->
         <androidx.cardview.widget.CardView
