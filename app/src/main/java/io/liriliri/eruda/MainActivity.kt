@@ -152,7 +152,7 @@ class MainActivity : AppCompatActivity() {
             textUrl.apply {
                 setOnEditorActionListener { _, actionId, event ->
                     if (actionId == EditorInfo.IME_ACTION_GO || 
-                        event?.keyCode == KeyEvent.KEYCODE_ENTER) {
+                        (event?.keyCode == KeyEvent.KEYCODE_ENTER && event.action == KeyEvent.ACTION_DOWN)) {
                         handleUrlInput()
                         true
                     } else {
@@ -180,13 +180,13 @@ class MainActivity : AppCompatActivity() {
                 }
             }
             
-            btnGoBack.setOnClickListener {
+            goBack.setOnClickListener {
                 if (webView.canGoBack()) {
                     webView.goBack()
                 }
             }
             
-            btnGoForward.setOnClickListener {
+            goForward.setOnClickListener {
                 if (webView.canGoForward()) {
                     webView.goForward()
                 }
@@ -216,10 +216,14 @@ class MainActivity : AppCompatActivity() {
                 textUrl.setText(state.title ?: "Loading...")
             }
             
-            goBack.isEnabled = state.canGoBack
-            goForward.isEnabled = state.canGoForward
-            goBack.alpha = if (state.canGoBack) 1.0f else 0.4f
-            goForward.alpha = if (state.canGoForward) 1.0f else 0.4f
+            // Update navigation state
+            val canGoBack = webView.canGoBack()
+            val canGoForward = webView.canGoForward()
+            
+            goBack.isEnabled = canGoBack
+            goForward.isEnabled = canGoForward
+            goBack.alpha = if (canGoBack) 1.0f else 0.4f
+            goForward.alpha = if (canGoForward) 1.0f else 0.4f
         }
     }
     
